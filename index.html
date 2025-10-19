@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="te">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>JARVIS </title>
+<style>
+body {
+  background: black;
+  color: cyan;
+  font-family: Arial,sans-serif;
+  text-align: center;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+}
+body::before {
+  content:"";
+  position:fixed;
+  top:0; left:0;
+  width:100%; height:100%;
+  background-image:
+    linear-gradient(to right, rgba(0,255,255,0.12) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0,255,255,0.12) 1px, transparent 1px);
+  background-size: 40px 40px;
+  z-index:-1;
+}
+
+#circle {
+  width: 200px; height: 200px;
+  border-radius: 50%; border:3px solid cyan;
+  margin:40px auto 10px auto;
+  display:flex; align-items:center; justify-content:center;
+  font-size:26px; font-weight:bold;
+  text-shadow:0 0 10px cyan;
+  box-shadow:0 0 30px cyan, inset 0 0 20px cyan;
+  transition: all 0.3s ease;
+}
+#circle.active { box-shadow:0 0 50px cyan, inset 0 0 30px cyan; text-shadow:0 0 20px cyan; }
+
+button {
+  margin:10px 5px;
+  padding:10px 20px;
+  font-size:16px;
+  background:cyan;
+  border:none;
+  border-radius:10px;
+  cursor:pointer;
+}
+button:hover { background:#00ffffa8; }
+
+#status { margin-top:10px; font-size:18px; }
+.search-container { margin-top:15px; display:flex; justify-content:center; gap:10px; max-width:90%; margin:auto; }
+#searchInput { padding:10px; font-size:16px; background:rgba(0,255,255,0.06); border:2px solid cyan; border-radius:8px; color:white; width:250px; outline:none; }
+#searchInput::placeholder { color: rgba(0, 255, 255, 0.5); }
+
+.output-text { margin:10px auto; padding:10px; background:rgba(0,255,255,0.06); border:1px solid cyan; border-radius:8px; color:white; font-size:16px; max-width:92%; text-align:left; word-break:break-word;}
+.output-text.input { color:#00ffff; border-left:4px solid #00ffff; }
+.output-text.response { color:#bfefff; border-left:4px solid #00ccff; }
+
+/* ================= Round AgroJARVIS Group ================= */
+#agroGroup {
+  display:none; margin: 20px auto; width: 220px; text-align: center;
+}
+#agroPanel {
+  width: 200px; height: 200px; border-radius: 50%;
+  border:3px solid cyan;
+  margin:0 auto;
+  background: rgba(0,255,255,0.08);
+  box-shadow:0 0 40px cyan, inset 0 0 20px cyan;
+  color:#bfefff;
+  display:flex;
+  align-items:center; justify-content:center;
+  font-size:18px; font-weight:bold;
+}
+#agroInputArea { margin-top:10px; text-align:center; }
+#agroInputArea input { width: 180px; padding:6px; border:2px solid cyan; border-radius:6px; background: rgba(0,255,255,0.05); color:white; outline:none; font-size:14px;}
+#agroInputArea button { margin-left:5px; padding:6px 12px; font-size:14px; border-radius:6px;}
+#agroOutput { margin-top:10px; font-size:14px; max-height:100px; overflow-y:auto; text-align:left; }
+
+/* Mobile adjustments */
+@media(max-width:480px){
+  #circle{width:150px;height:150px;font-size:20px;}
+  #agroGroup{width:170px;}
+  #agroPanel{width:150px;height:150px;}
+  #agroInputArea input{width:130px;}
+}
+</style>
+</head>
+<body>
+
+<div id="circle"> JARVIS</div>
+<button id="voiceBtn">🎤 Voice</button>
+<button id="cropBtn">🌾 AgroJARVIS</button>
+<button id="cameraBtn">📹 Security Camera</button>
+
+<div class="search-container">
+  <input type="text" id="searchInput" placeholder="Type or say something...">
+  <button id="searchBtn">Send</button>
+</div>
+
+<div id="status">Status: Idle</div>
+<div id="output"></div>
+
+<!-- ================= AgroJARVIS Group ================= -->
+<div id="agroGroup">
+  <div id="agroPanel">🌾 AgroJARVIS</div>
+  <div id="agroInputArea">
+    <input type="text" id="agroCity" placeholder="నగరం లేదా గ్రామం రాయండి...">
+    <button id="agroCheckBtn">Check Weather</button>
+    <div id="agroOutput"></div>
+  </div>
+</div>
+
+<script>
+// ------------------ CONFIG ------------------
+const WEATHER_KEY = "1e048de77a754beba45160335251510"; // Replace with your WeatherAPI key
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
+// DOM
+const cropBtn = document.getElementById("cropBtn");
+const agroGroup = document.getElementById("agroGroup");
+const agroCity = document.getElementById("agroCity");
+const agroCheckBtn = document.getElementById("agroCheckBtn");
+const agroOutput = document.getElementById("agroOutput");
+const cameraBtn = document.getElementById("cameraBtn");
+const searchBtn = document.getElementById("searchBtn");
+const searchInput = document.getElementById("searchInput");
+const output = document.getElementById("output");
+
+// ------------------ Helpers ------------------
+function displayOutput(text,type="response"){
+  const el = document.createElement("div");
+  el.className = `output-text ${type}`;
+  el.textContent = text;
+  output.insertBefore(el, output.firstChild);
+}
+function speakText(text, lang="te-IN"){
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = lang;
+  const voices = speechSynthesis.getVoices();
+  utter.voice = voices.find(v=>v.lang===lang)||voices[0];
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(utter);
+}
+
+// ------------------ Farming tips ------------------
+function getFarmingTip(temp, cond){
+  let tip="";
+  if(temp>35) tip="💧 చాలా వేడి! పంటలకు ఉదయం/సాయంత్రం నీరు ఇవ్వండి.";
+  else if(temp<20) tip="🌾 చల్లని వాతావరణం — గోధుమ పంటలకు మంచిది.";
+  else tip="☀️ మితమైన ఉష్ణోగ్రత — పంటలకు అనుకూలం.";
+  if(cond.toLowerCase().includes("rain")) tip+=" 🌧️ వర్షం రావచ్చు — పంటలను రక్షించండి.";
+  return tip;
+}
+
+// ------------------ AgroJARVIS ------------------
+async function checkWeather(city){
+  if(!city) return;
+  agroOutput.textContent="🌦 వాతావరణం తీసుకుంటోంది...";
+  try{
+    const res = await fetch(`https://api.weatherapi.com/v1/current.json?key=${WEATHER_KEY}&q=${encodeURIComponent(city)}`);
+    const data = await res.json();
+    if(data.error){ agroOutput.textContent="నగరం/గ్రామం కనుగొనబడలేదు."; return; }
+    const { temp_c, humidity, wind_kph, condition, feelslike_c } = data.current;
+    const { name, region, country, localtime } = data.location;
+    let report = `${name}, ${region}, ${country} (సమయం: ${localtime})\n`;
+    report += `${condition.text}, 🌡️ ఉష్ణోగ్రత: ${temp_c}°C (అనుభవం: ${feelslike_c}°C), తేమ: ${humidity}%, గాలి: ${wind_kph} km/h\n`;
+    const tip = getFarmingTip(temp_c, condition.text);
+    agroOutput.textContent = report + "\n" + tip;
+    speakText(report + " " + tip,"te-IN");
+  }catch(e){ agroOutput.textContent="నెట్‌వర్క్ లోపం. ఇంటర్నెట్ తనిఖీ చేయండి."; }
+}
+
+// Toggle AgroJARVIS
+cropBtn.onclick = ()=>{
+  agroGroup.style.display = agroGroup.style.display==="block"?"none":"block";
+};
+
+// Agro check button
+agroCheckBtn.onclick = ()=>{
+  const city = agroCity.value.trim();
+  if(city) checkWeather(city);
+};
+
+// Security Camera opens in new tab
+cameraBtn.onclick = ()=>{
+  window.open("https://codepen.io/Jitendra-the-encoder/pen/myVyLJE", "_blank");
+};
+
+// ------------------ OpenAI Chat ------------------
+async function askOpenAI(prompt){
+  displayOutput("Input: "+prompt,"input");
+  displayOutput(" JARVIS: Thinking...","response");
+  try{
+    const res = await fetch("https://api.openai.com/v1/chat/completions",{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "Authorization": `Bearer ${OPENAI_KEY}`
+      },
+      body: JSON.stringify({
+        model:"gpt-4o-mini",
+        messages:[
+          {role:"system", content:"You are JARVIS, a futuristic AI assistant created by Jeetendra."},
+          {role:"user", content:prompt}
+        ]
+      })
+    });
+    const data = await res.json();
+    const answer = data.choices[0].message.content;
+    displayOutput(answer,"response");
+    speakText(answer,"en-US");
+  }catch(e){
+    displayOutput("Error connecting to OpenAI.","response");
+  }
+}
+
+// Search bar
+searchBtn.onclick = ()=>{
+  const val = searchInput.value.trim();
+  if(!val) return;
+  askOpenAI(val);
+  searchInput.value="";
+};
+searchInput.addEventListener("keypress", (e)=>{ if(e.key==="Enter") searchBtn.click(); });
+
+// ------------------ Voice Recognition ------------------
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition=null;
+if(SpeechRecognition){
+  recognition = new SpeechRecognition();
+  recognition.continuous=false;
+  recognition.lang="en-US";
+  recognition.onresult = (ev)=>{
+    const cmd = ev.results[0][0].transcript.trim();
+    askOpenAI(cmd);
+  };
+  recognition.onstart = ()=>{ document.getElementById("circle").classList.add("active"); };
+  recognition.onend = ()=>{ document.getElementById("circle").classList.remove("active"); };
+  document.getElementById("voiceBtn").onclick = ()=>{ recognition.start(); };
+}
+
+displayOutput("JARVIS Ready. Click 🌾 for AgroJARVIS or 📹 for Security Camera.","response");
+</script>
+</body>
+</html>
